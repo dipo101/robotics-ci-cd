@@ -46,15 +46,15 @@ jobs:
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v "LongPathsEnabled" /t REG_DWORD /d 1 /f
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
-        # Create Bazel directories with proper permissions
-        $bazelDir = Join-Path $env:USERPROFILE ".bazel"
+        # Create .bazelrc in workspace root with proper Windows paths
+        $bazelDir = "C:/bazel-output"
         New-Item -Path $bazelDir -ItemType Directory -Force | Out-Null
-        icacls $bazelDir /grant "${env:USERNAME}:(OI)(CI)F" /T
+        icacls $bazelDir /grant "Everyone:(OI)(CI)F" /T
 
-        # Create .bazelrc in workspace root
+        # Use forward slashes in .bazelrc for Windows compatibility
         Set-Content -Path ".bazelrc" -Value @(
           "startup --windows_enable_symlinks",
-          "startup --output_user_root=$bazelDir",
+          "startup --output_user_root=C:/bazel-output",
           "build --enable_runfiles"
         )
 
