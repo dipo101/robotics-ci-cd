@@ -46,8 +46,8 @@ jobs:
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v "LongPathsEnabled" /t REG_DWORD /d 1 /f
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
-        # Create a junction instead of symlink for Bazel
-        cmd /c "mklink /J bazel-root $(Get-Location)"
+        # Create Bazel output directory outside workspace
+        New-Item -Path "D:\_bazel_output" -ItemType Directory -Force | Out-Null
 
     - name: Debug environment (Windows only)
       if: matrix.os == 'windows-latest'
@@ -105,7 +105,7 @@ jobs:
           # Run Bazel and capture ALL output
           $output = & {
             $ErrorActionPreference = 'Continue'
-            & bazel --output_user_root="$(Get-Location)\bazel-root" build //... --verbose_failures --show_timestamps 2>&1
+            & bazel --output_user_root="D:\_bazel_output" build //... --verbose_failures --show_timestamps 2>&1
             $LASTEXITCODE
           }
           
@@ -141,7 +141,7 @@ jobs:
         $env:BAZEL_WORKSPACE = $workspace
         Push-Location $workspace
         try {
-          bazel --output_user_root="$(Get-Location)\bazel-root" test //... --verbose_failures --show_timestamps
+          bazel --output_user_root="D:\_bazel_output" test //... --verbose_failures --show_timestamps
           exit $LASTEXITCODE
         }
         finally {
