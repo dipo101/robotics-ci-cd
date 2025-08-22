@@ -22,9 +22,12 @@ jobs:
           submodules: 'recursive'
 
       - name: Set up Bazel
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazel-contrib/setup-bazel@v0.15.0
         with:
-          bazelisk-version: 'latest'
+          bazelisk-version: 'v1.27.0'
+          bazelisk-cache: 'true'
+          disk-cache: 'true'
+          repository-cache: 'true'
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -54,9 +57,12 @@ jobs:
           submodules: 'recursive'
 
       - name: Set up Bazel
-        uses: bazelbuild/setup-bazelisk@v3
+        uses: bazel-contrib/setup-bazel@v0.15.0
         with:
-          bazelisk-version: 'latest'
+          bazelisk-version: 'v1.27.0'
+          bazelisk-cache: 'true'
+          disk-cache: 'true'
+          repository-cache: 'true'
       
       - name: Build C++ artifacts
         run: bazel build //apps/my_app:my_app --compilation_mode=opt
