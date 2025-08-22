@@ -76,7 +76,7 @@ jobs:
       run: |
         Write-Host "Running Bazel build on Windows with detailed logging..."
         try {
-          bazel build //... --verbose_failures --show_timestamps --output_user_root=./bazel-user-root 2>&1 | Tee-Object -FilePath bazel-build.log
+          bazel build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
           $exitCode = $LASTEXITCODE
         } catch {
           Write-Host "Bazel build failed with exception: $_"
@@ -117,7 +117,6 @@ jobs:
         name: windows-debug-logs-${{ github.run_id }}
         path: |
           bazel-build.log
-          bazel-user-root/
         retention-days: 7
 
   lint-and-format:
