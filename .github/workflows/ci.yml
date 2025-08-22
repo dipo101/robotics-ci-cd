@@ -49,7 +49,9 @@ jobs:
         # Create .bazelrc in workspace root
         Set-Content -Path ".bazelrc" -Value @(
           "startup --windows_enable_symlinks",
-          "build --enable_runfiles"
+          "startup --output_user_root=D:/_bazel",
+          "build --enable_runfiles",
+          "build --workspace_status_command=pwd"
         )
 
     - name: Debug environment (Windows only)
@@ -93,8 +95,10 @@ jobs:
         $workspace = (Get-Location).Path
         Write-Host "Workspace path: $workspace"
         
-        # Set BAZEL_WORKSPACE to help Bazel find the root
+        # Set environment variables to help Bazel find paths
         $env:BAZEL_WORKSPACE = $workspace
+        $env:BAZEL_SH = "C:\msys64\usr\bin\bash.exe"
+        $env:BAZEL_VC = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC"
         
         # Run from workspace root with absolute path
         Push-Location $workspace
@@ -102,7 +106,7 @@ jobs:
           # Run Bazel and capture ALL output
           $output = & {
             $ErrorActionPreference = 'Continue'
-            & bazel --nohome_rc --nosystem_rc build //... --verbose_failures --show_timestamps 2>&1
+            & bazel build //... --verbose_failures --show_timestamps --config=windows 2>&1
             $LASTEXITCODE
           }
           
@@ -138,7 +142,7 @@ jobs:
         $env:BAZEL_WORKSPACE = $workspace
         Push-Location $workspace
         try {
-          bazel --nohome_rc --nosystem_rc test //... --verbose_failures --show_timestamps
+          bazel test //... --verbose_failures --show_timestamps --config=windows
           exit $LASTEXITCODE
         }
         finally {
