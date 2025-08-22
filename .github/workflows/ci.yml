@@ -35,6 +35,24 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
+    - name: Debug environment (Windows only)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "=== Environment Debug Info ==="
+        echo "OS: $RUNNER_OS"
+        echo "Platform: $RUNNER_ARCH"
+        echo "Python location: ${{ env.pythonLocation }}"
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+        echo "Bazel version:"
+        bazel --version
+        echo "Bazel info:"
+        bazel info
+        echo "Bazel info (detailed):"
+        bazel info --show_make_env
+        echo "=== End Environment Debug ==="
+
     - name: Mount Bazel cache
       uses: actions/cache@v4
       with:
@@ -46,7 +64,17 @@ jobs:
           bazel-cache-${{ matrix.os }}-
 
     - name: Build all targets
-      run: bazel build //...
+      run: |
+        if [ "$RUNNER_OS" == "Windows" ]; then
+          echo "Running Bazel build on Windows with detailed logging..."
+          bazel build //... --verbose_failures --show_timestamps --output_user_root=./bazel-user-root 2>&1 | tee bazel-build.log
+          echo "Bazel build completed with exit code: $?"
+          echo "=== Bazel build log ==="
+          cat bazel-build.log
+          echo "=== End Bazel build log ==="
+        else
+          bazel build //...
+        fi
 
     - name: Test all targets
       run: bazel test //...
@@ -61,6 +89,16 @@ jobs:
         # Add the python directory to PYTHONPATH so tests can find the module
         export PYTHONPATH="${PYTHONPATH}:$(pwd)/python/src"
         pytest tests/python
+
+    - name: Upload debug logs (Windows only)
+      if: matrix.os == 'windows-latest' && failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-debug-logs-${{ github.run_id }}
+        path: |
+          bazel-build.log
+          bazel-user-root/
+        retention-days: 7
 
   lint-and-format:
     runs-on: ubuntu-latest
