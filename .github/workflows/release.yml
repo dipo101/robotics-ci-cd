@@ -21,18 +21,18 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Set up Bazel
-        uses: bazel-contrib/setup-bazel@v0.15.0
-        with:
-          bazelisk-version: 'v1.27.0'
-          bazelisk-cache: 'true'
-          disk-cache: 'true'
-          repository-cache: 'true'
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-version: '1.27.0'
+          bazelisk-cache: 'true'
+          disk-cache: 'true'
+          repository-cache: 'true'
 
       - name: Install build dependencies
         run: pip install setuptools wheel
@@ -56,10 +56,15 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Set up Bazel
-        uses: bazel-contrib/setup-bazel@v0.15.0
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          bazelisk-version: 'v1.27.0'
+          python-version: '3.10'
+
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-version: '1.27.0'
           bazelisk-cache: 'true'
           disk-cache: 'true'
           repository-cache: 'true'
