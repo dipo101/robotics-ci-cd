@@ -20,6 +20,11 @@ jobs:
       with:
         submodules: 'recursive'
 
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
     - name: Set up Bazel
       uses: bazel-contrib/setup-bazel@0.15.0
       with:
@@ -43,16 +48,12 @@ jobs:
 
     - name: Test all targets
       run: bazel test //...
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
     
     - name: Install Python dependencies and run Python tests
       shell: bash
       run: |
         pip install pytest
+        rm -rf build/ dist/ bazel-bin/ || true
         pip install -e .
         pytest tests/python
 
