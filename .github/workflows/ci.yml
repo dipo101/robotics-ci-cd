@@ -46,8 +46,11 @@ jobs:
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v "LongPathsEnabled" /t REG_DWORD /d 1 /f
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
-        # Create Bazel output directory outside workspace
-        New-Item -Path "D:\_bazel_output" -ItemType Directory -Force | Out-Null
+        # Create .bazelrc in workspace root
+        Set-Content -Path ".bazelrc" -Value @(
+          "startup --windows_enable_symlinks",
+          "build --enable_runfiles"
+        )
 
     - name: Debug environment (Windows only)
       if: matrix.os == 'windows-latest'
@@ -66,12 +69,6 @@ jobs:
         bazel --version
         Write-Host "Bazel info:"
         bazel info
-        Write-Host "Bazel info (detailed):"
-        try {
-          bazel info --show_make_env
-        } catch {
-          Write-Host "Bazel info failed: $_"
-        }
         Write-Host "=== End Environment Debug ==="
 
     - name: Mount Bazel cache
@@ -105,7 +102,7 @@ jobs:
           # Run Bazel and capture ALL output
           $output = & {
             $ErrorActionPreference = 'Continue'
-            & bazel --output_user_root="D:\_bazel_output" build //... --verbose_failures --show_timestamps 2>&1
+            & bazel --nohome_rc --nosystem_rc build //... --verbose_failures --show_timestamps 2>&1
             $LASTEXITCODE
           }
           
@@ -141,7 +138,7 @@ jobs:
         $env:BAZEL_WORKSPACE = $workspace
         Push-Location $workspace
         try {
-          bazel --output_user_root="D:\_bazel_output" test //... --verbose_failures --show_timestamps
+          bazel --nohome_rc --nosystem_rc test //... --verbose_failures --show_timestamps
           exit $LASTEXITCODE
         }
         finally {
