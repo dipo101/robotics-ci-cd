@@ -35,43 +35,80 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Build on Windows (rc-free, pinned paths)
+    - name: Build on Windows (hardened + scan for bad paths)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
 
+        # ----- Stable absolute roots -----
         $drive = (Get-Location).Path.Substring(0,2)   # e.g. 'D:'
         $ROOT  = "$drive/bzl" -replace '\\','/'
         New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home","$ROOT/out" | Out-Null
 
-        # Absolute, sane dirs (do NOT touch HOMEDRIVE/HOMEPATH)
+        # ----- Clean/process-local env -----
         $env:TMP         = "$ROOT/tmp"
         $env:TEMP        = "$ROOT/tmp"
         $env:TEST_TMPDIR = "$ROOT/tmp"
         $env:HOME        = "$ROOT/home"
         $env:USERPROFILE = "$ROOT/home"
 
-        # Scrub Bazel-specific startup envs
+        # Scrub bazel-specific startup envs
         foreach ($k in 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE') {
           [Environment]::SetEnvironmentVariable($k,$null,'Process')
         }
 
-        # Kill any server started with different env/roots
-        bazel --ignore_all_rc_files shutdown
+        # Find ANY env var that is exactly "\" or "/" and clear it (common culprit)
+        $badVals = @('\','/')
+        $sus = gci env: | ? { $badVals -contains $_.Value }
+        foreach ($e in $sus) {
+          Write-Host "Clearing suspicious env: $($e.Name)='$($e.Value)'"
+          [Environment]::SetEnvironmentVariable($e.Name,$null,'Process')
+        }
 
-        # All bazel invocations in THIS step must carry the same startup flags
-        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out info output_base
+        # ----- Quick static scan of repo for Windows-bad absolute roots -----
+        # Looks for:
+        #  - local_repository/new_local_repository path = "\" or "/"
+        #  - bzlmod local_path_override(..., path = "\" or "/")
+        #  - .bazelrc startup/build flags that set output_* or install_base to "\" or "/"
+        $patterns = @(
+          'local_repository\s*\([^)]*path\s*=\s*["'']\\["'']',
+          'local_repository\s*\([^)]*path\s*=\s*["'']\/["'']',
+          'new_local_repository\s*\([^)]*path\s*=\s*["'']\\["'']',
+          'new_local_repository\s*\([^)]*path\s*=\s*["'']\/["'']',
+          'local_path_override\s*\([^)]*path\s*=\s*["'']\\["'']',
+          'local_path_override\s*\([^)]*path\s*=\s*["'']\/["'']',
+          'startup\s+--(output_user_root|output_base|install_base)\s*=\s*[\\/]$',
+          'build\s+--(output_user_root|output_base|install_base)\s*=\s*[\\/]$'
+        )
+        $hits = @()
+        foreach ($p in $patterns) {
+          $hits += Select-String -Path @(".bazelrc","WORKSPACE","WORKSPACE.bzl","MODULE.bazel","**/*.bzl","**/BUILD","**/BUILD.bazel") -Pattern $p -AllMatches -ErrorAction SilentlyContinue
+        }
+        if ($hits.Count -gt 0) {
+          Write-Host "=== Suspicious path settings detected ==="
+          $hits | % { "$($_.Path):$($_.LineNumber): $($_.Line)" } | Sort-Object -Unique | ForEach-Object { Write-Host $_ }
+          Write-Host "========================================="
+        }
 
-        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out `
+        # ----- Start from a clean Bazel server with pinned roots -----
+        bazel --ignore_all_rc_files --nowatchfs `
+              --output_user_root=$ROOT --output_base=$ROOT/out shutdown
+
+        # Info (should show D:/bzl/out etc.)
+        bazel --ignore_all_rc_files --nowatchfs `
+              --output_user_root=$ROOT --output_base=$ROOT/out info output_base
+
+        # Build & test (pipe logs to files for artifact upload)
+        bazel --ignore_all_rc_files --nowatchfs `
+              --output_user_root=$ROOT --output_base=$ROOT/out `
               build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
 
-        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out `
+        bazel --ignore_all_rc_files --nowatchfs `
+              --output_user_root=$ROOT --output_base=$ROOT/out `
               test //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-test.log
 
-        # Extra debug info to verify rc and temp settings
-        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out info 2>&1 | Tee-Object -FilePath bazel-info.log
-
+        # Dump env for post-mortem
         Write-Host "`n=== Path env dump ==="
         gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|USERPROFILE|HOMEDRIVE|HOMEPATH' } | sort Name | ft -AutoSize
 
