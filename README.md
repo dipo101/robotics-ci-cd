@@ -1,6 +1,6 @@
-# MyRobotProject
+# RoboticsCiCd
 
-Python bindings for the MyRobotProject C++ library.
+Python bindings for the toy MyRobotProject C++ library.
 
 This project is a Continuous Integration, Continuous Delivery (CI/CD), and Release pipeline tailored for robotics applications. It's deliberately a modular monorepo to make sure it's maintanable and easy to understand. The project is still under active development, but the following sequence outlines the end-to-end flow we want a developer to achieve:
 
