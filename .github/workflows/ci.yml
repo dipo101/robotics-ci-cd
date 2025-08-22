@@ -42,9 +42,6 @@ jobs:
         Write-Host "Setting up Windows environment..."
         # Enable Developer Mode for symlinks
         reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
-        # Create Bazel output directories
-        New-Item -Path C:/bazel/output -ItemType Directory -Force | Out-Null
-        New-Item -Path C:/bazel/output/base -ItemType Directory -Force | Out-Null
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
 
@@ -94,7 +91,7 @@ jobs:
         # Run Bazel and capture ALL output
         $output = & {
           $ErrorActionPreference = 'Continue'
-          & bazel build //... --verbose_failures --show_timestamps --output_base=C:/bazel/output/base 2>&1
+          & bazel build //... --verbose_failures --show_timestamps --config=windows 2>&1
           $LASTEXITCODE
         }
         
@@ -113,12 +110,17 @@ jobs:
         
         exit $exitCode
 
-    - name: Build all targets (Non-Windows)
+    - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
-      run: bazel build //...
+      run: bazel build //... --config=unix
 
-    - name: Test all targets
-      run: bazel test //...
+    - name: Test all targets (Windows)
+      if: matrix.os == 'windows-latest'
+      run: bazel test //... --config=windows
+
+    - name: Test all targets (Unix)
+      if: matrix.os != 'windows-latest'
+      run: bazel test //... --config=unix
     
     - name: Install Python dependencies and run Python tests
       shell: bash

@@ -10,6 +10,3 @@ build:windows --experimental_convenience_symlinks=ignore
 # Unix-specific configuration (Linux and macOS)
 build:unix --spawn_strategy=sandboxed
 build:unix --strategy=Genrule=sandboxed
-
-# Detect platform automatically
-build:windows --enable_runfiles
