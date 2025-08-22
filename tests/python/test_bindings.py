@@ -1,4 +1,3 @@
-import pytest
 from my_robot_py import Kinematics, Pose
 
 def test_kinematics_instantiation():
@@ -16,4 +15,4 @@ def test_kinematics_forward_pass():
    # Assert on the result, which should be a bound struct or class
    assert isinstance(pose, Pose)
    assert isinstance(pose.x, float)
-   assert pose.x == pytest.approx(1.234)
+   assert abs(pose.x - 1.234) < 0.001  # Use manual approximation instead of pytest.approx

@@ -1,6 +1,6 @@
 [build-system]
-requires = ["scikit-build-core>=0.7.0", "pybind11"]
-build-backend = "scikit_build_core.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "my_robot_py"
@@ -18,8 +18,3 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-
-[tool.scikit-build]
-# Point scikit-build-core to the root CMakeLists.txt
-cmake.source-dir = "."
-wheel.packages = ["python/src/my_robot_py"]

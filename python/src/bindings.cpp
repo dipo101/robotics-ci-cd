@@ -7,9 +7,9 @@
 namespace py = pybind11;
 
 // The PYBIND11_MODULE macro creates a function that will be called when
-// the Python module is imported. The module name (_bindings) must match
-// the name given to pybind11_add_module in CMake.
-PYBIND11_MODULE(_bindings, m) {
+// the Python module is imported. The module name (my_robot_py) must match
+// the name given to pybind_extension in Bazel.
+PYBIND11_MODULE(my_robot_py, m) {
    // Optional: Add a docstring for the module
    m.doc() = "Python bindings for the MyRobotProject C++ library";
 

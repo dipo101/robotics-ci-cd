@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+
+cc_test(
+    name = "kinematics_test",
+    srcs = ["test_kinematics.cpp"],
+    deps = [
+        "//src/kinematics:kinematics",
+        "@com_google_googletest//:gtest_main",
+    ],
+)

@@ -1,4 +1,4 @@
-name: C/C++ CI
+name: C/C++ CI with Bazel
 
 on:
   push:
@@ -12,7 +12,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        build_type: [Debug, Release]
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -21,44 +20,37 @@ jobs:
       with:
         submodules: 'recursive'
 
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential ninja-build
+    - name: Set up Bazel
+      uses: bazelbuild/setup-bazel@v3
+      with:
+        bazel-version: '7.2.1'
 
-    - name: Download and install MuJoCo
-      run: |
-        # This is a placeholder for downloading and installing MuJoCo.
-        # For now, we'll just create a dummy directory.
-        mkdir -p $HOME/mujoco
-        echo "CMAKE_PREFIX_PATH=$HOME/mujoco" >> $GITHUB_ENV
-    
+    - name: Mount Bazel cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/bazel
+          ~/.cache/bazel-repo
+        key: bazel-cache-${{ matrix.os }}-${{ github.sha }}
+        restore-keys: |
+          bazel-cache-${{ matrix.os }}-
+
+    - name: Build all targets
+      run: bazel build //...
+
+    - name: Test all targets
+      run: bazel test //...
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
     
-    - name: Configure CMake
-      run: >
-        cmake -S . -B build
-        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        ${{ runner.os == 'Linux' && '-G Ninja' || '' }}
-
-    - name: Build project
-      run: cmake --build build --config ${{ matrix.build_type }}
-
-    - name: Run C++ Tests
-      run: |
-        cd build
-        ctest -C ${{ matrix.build_type }} --output-on-failure
-    
     - name: Install Python dependencies and run Python tests
       shell: bash
       run: |
-        pip install pytest build
-        python -m build --wheel
-        pip install dist/*.whl
+        pip install pytest
+        pip install .
         pytest tests/python
 
   lint-and-format:

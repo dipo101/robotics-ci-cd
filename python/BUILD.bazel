@@ -1,0 +1,11 @@
+load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
+
+package(default_visibility = ["//visibility:public"])
+
+pybind_extension(
+    name = "my_robot_py",
+    srcs = ["src/bindings.cpp"],
+    deps = [
+        "//src/kinematics:kinematics",
+    ],
+)

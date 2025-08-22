@@ -5,6 +5,12 @@ CMakeFiles/
 cmake_install.cmake
 compile_commands.json
 
+# Bazel
+bazel-*
+/bazel-out
+/bazel-testlogs
+/bazel-bin
+
 # Python
 __pycache__/
 *.pyc

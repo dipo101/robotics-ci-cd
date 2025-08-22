@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+# This file defines the core kinematics C++ library.
+
+cc_library(
+    name = "kinematics",
+    srcs = ["kinematics.cpp"],
+    deps = ["//include/my_robot_project:headers"], 
+    visibility = ["//visibility:public"],
+)

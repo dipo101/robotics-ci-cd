@@ -1,0 +1,9 @@
+# This file defines the C++ application executable.
+
+cc_binary(
+    name = "my_app",
+    srcs = ["main.cpp"],
+    deps = [
+        "//src/kinematics:kinematics",
+    ],
+)
