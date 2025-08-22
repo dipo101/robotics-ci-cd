@@ -22,6 +22,8 @@ classifiers = [
 [tool.scikit-build]
 # Point scikit-build-core to the root CMakeLists.txt
 cmake.source-dir = "."
+# Explicitly list the Python package directory.
+wheel.packages = ["python/src/my_robot_py"]
 # Tell scikit-build-core where to install the Python module from the
 # CMake build directory. The path is relative to the CMake install prefix.
 wheel.install-dir = "my_robot_py"

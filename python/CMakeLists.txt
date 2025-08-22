@@ -13,3 +13,8 @@ target_link_libraries(_bindings
    PRIVATE
        kinematics
 )
+
+# Install the module to the correct location for scikit-build-core to find.
+# This ensures the compiled C++ module is placed in the 'my_robot_py'
+# directory inside the final Python wheel.
+install(TARGETS _bindings DESTINATION my_robot_py)

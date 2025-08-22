@@ -55,7 +55,8 @@ jobs:
     
     - name: Install Python dependencies and run Python tests
       run: |
-        pip install pytest
+        pip install pytest build
+        python -m build
         pip install .
         pytest tests/python
 
