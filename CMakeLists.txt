@@ -9,6 +9,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Ensure all code is compiled as position-independent, which is required
+# for linking static libraries into shared libraries (like Python extensions).
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # --- Best Practices ---
 
 # Require out-of-source builds to keep the source directory clean

@@ -54,6 +54,7 @@ jobs:
         ctest -C ${{ matrix.build_type }} --output-on-failure
     
     - name: Install Python dependencies and run Python tests
+      shell: bash
       run: |
         pip install pytest build
         python -m build --wheel
