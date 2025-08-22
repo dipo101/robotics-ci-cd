@@ -37,21 +37,28 @@ jobs:
 
     - name: Debug environment (Windows only)
       if: matrix.os == 'windows-latest'
+      shell: powershell
       run: |
-        echo "=== Environment Debug Info ==="
-        echo "OS: $RUNNER_OS"
-        echo "Platform: $RUNNER_ARCH"
-        echo "Python location: ${{ env.pythonLocation }}"
-        echo "Current directory: $(pwd)"
-        echo "Directory contents:"
-        ls -la
-        echo "Bazel version:"
+        Write-Host "=== Environment Debug Info ==="
+        Write-Host "OS: $env:RUNNER_OS"
+        Write-Host "Platform: $env:RUNNER_ARCH"
+        Write-Host "Python location: ${{ env.pythonLocation }}"
+        Write-Host "Current directory: $(Get-Location)"
+        Write-Host "Directory contents:"
+        Get-ChildItem -Force
+        Write-Host "Hidden files:"
+        Get-ChildItem -Force -Hidden
+        Write-Host "Bazel version:"
         bazel --version
-        echo "Bazel info:"
+        Write-Host "Bazel info:"
         bazel info
-        echo "Bazel info (detailed):"
-        bazel info --show_make_env
-        echo "=== End Environment Debug ==="
+        Write-Host "Bazel info (detailed):"
+        try {
+          bazel info --show_make_env
+        } catch {
+          Write-Host "Bazel info failed: $_"
+        }
+        Write-Host "=== End Environment Debug ==="
 
     - name: Mount Bazel cache
       uses: actions/cache@v4
@@ -63,18 +70,31 @@ jobs:
         restore-keys: |
           bazel-cache-${{ matrix.os }}-
 
-    - name: Build all targets
+    - name: Build all targets (Windows)
+      if: matrix.os == 'windows-latest'
+      shell: powershell
       run: |
-        if [ "$RUNNER_OS" == "Windows" ]; then
-          echo "Running Bazel build on Windows with detailed logging..."
-          bazel build //... --verbose_failures --show_timestamps --output_user_root=./bazel-user-root 2>&1 | tee bazel-build.log
-          echo "Bazel build completed with exit code: $?"
-          echo "=== Bazel build log ==="
-          cat bazel-build.log
-          echo "=== End Bazel build log ==="
-        else
-          bazel build //...
-        fi
+        Write-Host "Running Bazel build on Windows with detailed logging..."
+        try {
+          bazel build //... --verbose_failures --show_timestamps --output_user_root=./bazel-user-root 2>&1 | Tee-Object -FilePath bazel-build.log
+          $exitCode = $LASTEXITCODE
+        } catch {
+          Write-Host "Bazel build failed with exception: $_"
+          $exitCode = 1
+        }
+        Write-Host "Bazel build completed with exit code: $exitCode"
+        if (Test-Path bazel-build.log) {
+          Write-Host "=== Bazel build log ==="
+          Get-Content bazel-build.log
+          Write-Host "=== End Bazel build log ==="
+        } else {
+          Write-Host "No bazel-build.log file was created"
+        }
+        exit $exitCode
+
+    - name: Build all targets (Non-Windows)
+      if: matrix.os != 'windows-latest'
+      run: bazel build //...
 
     - name: Test all targets
       run: bazel test //...
