@@ -35,31 +35,32 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Sanitize env & build (Windows)
+    - name: Build on Windows (hardened)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Short, absolute output root on the current drive (GitHub runners use D:)
-        $drive = (Get-Location).Path.Substring(0,2) # e.g. 'D:'
+        # Short absolute root on the current drive (GitHub runners: D:)
+        $drive = (Get-Location).Path.Substring(0,2)    # e.g. 'D:'
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home","$ROOT/out" | Out-Null
 
-        # Scrub problematic env vars that, if set to "\" or empty, make Bazel try to stat "\\?\"
-        $bad = { param($v) $null -ne $v -and ($v -eq '\' -or $v -eq '/' -or $v -eq '') }
-        $vars = 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE','TEST_TMPDIR','HOME','TMP','TEMP'
-        foreach ($k in $vars) {
-          $v = [Environment]::GetEnvironmentVariable($k,'Process')
-          if (& $bad $v) { [Environment]::SetEnvironmentVariable($k,$null,'Process') }
+        # Hard-set path envs to absolute values (don't rely on runner defaults)
+        $env:TMP         = "$ROOT/tmp"
+        $env:TEMP        = "$ROOT/tmp"
+        $env:HOME        = "$ROOT/home"
+        $env:TEST_TMPDIR = "$ROOT/tmp"
+        $env:HOMEDRIVE   = $drive
+        $env:HOMEPATH    = "/bzl/home"
+        $env:USERPROFILE = "$ROOT/home"
+
+        # Scrub Bazel path envs that, if '\' or empty, poison the server
+        foreach ($k in 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE') {
+          [Environment]::SetEnvironmentVariable($k,$null,'Process')
         }
 
-        # Set sane, absolute TEMP/HOME for the process (avoid anything under system profiles)
-        $env:TMP  = "$ROOT/tmp"
-        $env:TEMP = "$ROOT/tmp"
-        $env:HOME = "$ROOT/home"
-
-        # Optional: harden .bazelrc if the repo has bad startup lines pointing to "\" or "/"
+        # If your repo .bazelrc has bad startup paths, neutralize them in-process
         $rcPath = Join-Path (Get-Location) ".bazelrc"
         if (Test-Path $rcPath) {
           $rc = Get-Content $rcPath -Raw
@@ -68,63 +69,16 @@ jobs:
           Set-Content -NoNewline -Path $rcPath -Value $rc
         }
 
-        # Make sure we're not reusing a server started with bad env
-        bazel --output_user_root=$ROOT shutdown
+        # Ensure no server is running with different roots
+        bazel --output_user_root=$ROOT --output_base=$ROOT/out shutdown
 
-        # Sanity: show what Bazel thinks
-        bazel --output_user_root=$ROOT info release
-        bazel --output_user_root=$ROOT info output_base
+        # Build with startup opts (keep these on EVERY bazel call in this step)
+        bazel --output_user_root=$ROOT --output_base=$ROOT/out info output_base
+        bazel --output_user_root=$ROOT --output_base=$ROOT/out build //... --verbose_failures --show_timestamps
+        bazel --output_user_root=$ROOT --output_base=$ROOT/out test //... --verbose_failures --show_timestamps
 
-    - name: Debug environment (Windows only)
-      if: matrix.os == 'windows-latest'
-      shell: powershell
-      run: |
-        Write-Host "=== Environment Debug Info ==="
-        Write-Host "OS: $env:RUNNER_OS"
-        Write-Host "Platform: $env:RUNNER_ARCH"
-        Write-Host "Python location: ${{ env.pythonLocation }}"
-        Write-Host "Current directory: $(Get-Location)"
-        Write-Host "Directory contents:"
-        Get-ChildItem -Force
-        Write-Host "Hidden files:"
-        Get-ChildItem -Force -Hidden
-        Write-Host "Bazel version:"
-        bazel --version
-        Write-Host "Bazel info:"
-        bazel info
-        Write-Host "=== End Environment Debug ==="
-
-    - name: Mount Bazel cache
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/bazel
-          ~/.cache/bazel-repo
-        key: bazel-cache-${{ matrix.os }}-${{ github.sha }}
-        restore-keys: |
-          bazel-cache-${{ matrix.os }}-
-
-    - name: Build all targets (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        # Use same output root as sanitize step
-        $drive = (Get-Location).Path.Substring(0,2)
-        $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT --output_base="$ROOT/out" build //... --verbose_failures --show_timestamps
-
-    - name: Build all targets (Unix)
-      if: matrix.os != 'windows-latest'
-      run: bazel build //... --config=unix
-
-    - name: Test all targets (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        # Use same output root as sanitize step
-        $drive = (Get-Location).Path.Substring(0,2)
-        $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT --output_base="$ROOT/out" test //... --verbose_failures --show_timestamps
+        Write-Host "`n=== Path env dump ==="
+        gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|HOMEDRIVE|HOMEPATH|USERPROFILE' } | sort Name | ft -AutoSize
 
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
