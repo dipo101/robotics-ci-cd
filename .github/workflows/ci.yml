@@ -55,7 +55,12 @@ jobs:
         Set-Content -Path ".bazelrc" -Value @(
           "startup --windows_enable_symlinks",
           "startup --output_user_root=C:/bazel-output",
-          "build --enable_runfiles"
+          "build --enable_runfiles",
+          "",
+          "# Windows-specific configuration",
+          "build:windows --enable_runfiles",
+          "build:windows --spawn_strategy=local",
+          "build:windows --strategy=Genrule=local"
         )
 
     - name: Debug environment (Windows only)
