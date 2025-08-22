@@ -67,4 +67,5 @@ setup(
     ],
     cmdclass={"build_ext": BuildBazelExtension},
     zip_safe=False,
+    install_requires=[],  # No external dependencies
 )
