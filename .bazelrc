@@ -1,0 +1,8 @@
+# Windows-specific configuration
+build --enable_platform_specific_config
+
+# Disable sandboxing on Windows if it causes issues
+build --spawn_strategy=standalone
+
+# Use local execution on Windows
+build --strategy=Genrule=local
