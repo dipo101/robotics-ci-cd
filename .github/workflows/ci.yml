@@ -47,20 +47,28 @@ jobs:
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
         # Create .bazelrc in workspace root with proper Windows paths
-        $bazelDir = "C:/bazel-output"
+        $workspace = (Get-Location).Path
+        $bazelDir = Join-Path $workspace ".bazel-cache"
         New-Item -Path $bazelDir -ItemType Directory -Force | Out-Null
         icacls $bazelDir /grant "Everyone:(OI)(CI)F" /T
 
-        # Use forward slashes in .bazelrc for Windows compatibility
+        # Use Windows-style paths in .bazelrc
+        $bazelDirEscaped = $bazelDir.Replace('\', '\\')
         Set-Content -Path ".bazelrc" -Value @(
           "startup --windows_enable_symlinks",
-          "startup --output_user_root=C:/bazel-output",
+          "startup --output_user_root=$bazelDirEscaped",
+          "startup --output_base=$bazelDirEscaped\\base",
+          "",
+          "# Common settings",
           "build --enable_runfiles",
+          "build --noincompatible_windows_native_test_wrapper",
           "",
           "# Windows-specific configuration",
           "build:windows --enable_runfiles",
           "build:windows --spawn_strategy=local",
-          "build:windows --strategy=Genrule=local"
+          "build:windows --strategy=Genrule=local",
+          "build:windows --test_env=TEMP",
+          "build:windows --test_env=TMP"
         )
 
     - name: Debug environment (Windows only)
@@ -106,6 +114,7 @@ jobs:
         
         # Set environment variables to help Bazel find paths
         $env:BAZEL_WORKSPACE = $workspace
+        $env:BAZEL_OUTPUT_BASE = Join-Path $workspace ".bazel-cache\base"
         
         # Run from workspace root with absolute path
         Push-Location $workspace
