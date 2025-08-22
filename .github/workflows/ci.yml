@@ -32,6 +32,8 @@ jobs:
         bazelisk-cache: 'true'
         disk-cache: 'true'
         repository-cache: 'true'
+      env:
+        PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
     - name: Mount Bazel cache
       uses: actions/cache@v4
@@ -53,8 +55,11 @@ jobs:
       shell: bash
       run: |
         pip install pytest
-        rm -rf build/ dist/ bazel-bin/ || true
-        pip install -e .
+        # Copy the Bazel-built extension to the Python package location
+        mkdir -p python/src/my_robot_py/
+        cp bazel-bin/python/my_robot_py.so python/src/my_robot_py/
+        # Add the python directory to PYTHONPATH so tests can find the module
+        export PYTHONPATH="${PYTHONPATH}:$(pwd)/python/src"
         pytest tests/python
 
   lint-and-format:
