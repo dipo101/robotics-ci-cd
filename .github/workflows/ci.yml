@@ -111,7 +111,7 @@ jobs:
         # Use same output root as sanitize step
         $drive = (Get-Location).Path.Substring(0,2)
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT build //... --verbose_failures --show_timestamps --output_base="$ROOT/out"
+        bazel --output_user_root=$ROOT --output_base="$ROOT/out" build //... --verbose_failures --show_timestamps
 
     - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
@@ -124,7 +124,7 @@ jobs:
         # Use same output root as sanitize step
         $drive = (Get-Location).Path.Substring(0,2)
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT test //... --verbose_failures --show_timestamps --output_base="$ROOT/out"
+        bazel --output_user_root=$ROOT --output_base="$ROOT/out" test //... --verbose_failures --show_timestamps
 
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
