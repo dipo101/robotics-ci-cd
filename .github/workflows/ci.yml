@@ -35,11 +35,12 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Build on Windows (hardened + scan for bad paths)
+    - name: Build on Windows (rc-free, pinned paths + robust scan)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
+        $ProgressPreference = "SilentlyContinue"
 
         # ----- Stable absolute roots -----
         $drive = (Get-Location).Path.Substring(0,2)   # e.g. 'D:'
@@ -58,19 +59,18 @@ jobs:
           [Environment]::SetEnvironmentVariable($k,$null,'Process')
         }
 
-        # Find ANY env var that is exactly "\" or "/" and clear it (common culprit)
+        # Clear any env that is literally "\" or "/"
         $badVals = @('\','/')
-        $sus = gci env: | ? { $badVals -contains $_.Value }
-        foreach ($e in $sus) {
-          Write-Host "Clearing suspicious env: $($e.Name)='$($e.Value)'"
-          [Environment]::SetEnvironmentVariable($e.Name,$null,'Process')
+        gci env: | ? { $badVals -contains $_.Value } | % {
+          Write-Host "Clearing suspicious env: $($_.Name)='$($_.Value)'"
+          [Environment]::SetEnvironmentVariable($_.Name,$null,'Process')
         }
 
-        # ----- Quick static scan of repo for Windows-bad absolute roots -----
-        # Looks for:
-        #  - local_repository/new_local_repository path = "\" or "/"
-        #  - bzlmod local_path_override(..., path = "\" or "/")
-        #  - .bazelrc startup/build flags that set output_* or install_base to "\" or "/"
+        # ----- Static scan for Windows-bad path literals (safe against missing files) -----
+        $scanTargets = @('.bazelrc','MODULE.bazel','MODULE.bazel.lock') +
+                       (Get-ChildItem -Recurse -Include '*.bzl','BUILD','BUILD.bazel' | % FullName)
+        $scanTargets = $scanTargets | ? { Test-Path $_ } | Select-Object -Unique
+
         $patterns = @(
           'local_repository\s*\([^)]*path\s*=\s*["'']\\["'']',
           'local_repository\s*\([^)]*path\s*=\s*["'']\/["'']',
@@ -78,17 +78,27 @@ jobs:
           'new_local_repository\s*\([^)]*path\s*=\s*["'']\/["'']',
           'local_path_override\s*\([^)]*path\s*=\s*["'']\\["'']',
           'local_path_override\s*\([^)]*path\s*=\s*["'']\/["'']',
+          # rc entries that set output_* or install_base to just "/" or "\"
           'startup\s+--(output_user_root|output_base|install_base)\s*=\s*[\\/]$',
           'build\s+--(output_user_root|output_base|install_base)\s*=\s*[\\/]$'
         )
-        $hits = @()
-        foreach ($p in $patterns) {
-          $hits += Select-String -Path @(".bazelrc","WORKSPACE","WORKSPACE.bzl","MODULE.bazel","**/*.bzl","**/BUILD","**/BUILD.bazel") -Pattern $p -AllMatches -ErrorAction SilentlyContinue
-        }
-        if ($hits.Count -gt 0) {
-          Write-Host "=== Suspicious path settings detected ==="
-          $hits | % { "$($_.Path):$($_.LineNumber): $($_.Line)" } | Sort-Object -Unique | ForEach-Object { Write-Host $_ }
-          Write-Host "========================================="
+
+        $scanError = $false
+        try {
+          $hits = @()
+          foreach ($p in $patterns) {
+            $hits += Select-String -Path $scanTargets -Pattern $p -AllMatches -ErrorAction SilentlyContinue
+          }
+          if ($hits.Count -gt 0) {
+            "=== Suspicious path settings detected ===" | Tee-Object scan-findings.txt
+            ($hits | % { "$($_.Path):$($_.LineNumber): $($_.Line)" } | Sort-Object -Unique) |
+              Tee-Object -Append scan-findings.txt
+            "=========================================" | Tee-Object -Append scan-findings.txt
+            Get-Content scan-findings.txt
+          }
+        } catch {
+          $scanError = $true
+          "Scan failed: $($_.Exception.Message)" | Tee-Object scan-findings.txt
         }
 
         # ----- Start from a clean Bazel server with pinned roots -----
@@ -99,7 +109,7 @@ jobs:
         bazel --ignore_all_rc_files --nowatchfs `
               --output_user_root=$ROOT --output_base=$ROOT/out info output_base
 
-        # Build & test (pipe logs to files for artifact upload)
+        # Build & test (pipe logs)
         bazel --ignore_all_rc_files --nowatchfs `
               --output_user_root=$ROOT --output_base=$ROOT/out `
               build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
@@ -108,7 +118,7 @@ jobs:
               --output_user_root=$ROOT --output_base=$ROOT/out `
               test //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-test.log
 
-        # Dump env for post-mortem
+        # Dump env
         Write-Host "`n=== Path env dump ==="
         gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|USERPROFILE|HOMEDRIVE|HOMEPATH' } | sort Name | ft -AutoSize
 
@@ -140,6 +150,7 @@ jobs:
           bazel-build.log
           bazel-test.log
           bazel-info.log
+          scan-findings.txt
         retention-days: 7
 
   lint-and-format:
