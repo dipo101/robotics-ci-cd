@@ -46,12 +46,16 @@ jobs:
         reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v "LongPathsEnabled" /t REG_DWORD /d 1 /f
         # Set execution policy to allow scripts
         Set-ExecutionPolicy Bypass -Scope Process -Force
+        # Create Bazel directories with proper permissions
+        $bazelDir = Join-Path $env:USERPROFILE ".bazel"
+        New-Item -Path $bazelDir -ItemType Directory -Force | Out-Null
+        icacls $bazelDir /grant "${env:USERNAME}:(OI)(CI)F" /T
+
         # Create .bazelrc in workspace root
         Set-Content -Path ".bazelrc" -Value @(
           "startup --windows_enable_symlinks",
-          "startup --output_user_root=D:/_bazel",
-          "build --enable_runfiles",
-          "build --workspace_status_command=pwd"
+          "startup --output_user_root=$bazelDir",
+          "build --enable_runfiles"
         )
 
     - name: Debug environment (Windows only)
@@ -97,8 +101,6 @@ jobs:
         
         # Set environment variables to help Bazel find paths
         $env:BAZEL_WORKSPACE = $workspace
-        $env:BAZEL_SH = "C:\msys64\usr\bin\bash.exe"
-        $env:BAZEL_VC = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC"
         
         # Run from workspace root with absolute path
         Push-Location $workspace
