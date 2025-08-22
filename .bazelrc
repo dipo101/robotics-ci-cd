@@ -1,17 +1,15 @@
+# Common configuration for all platforms
+build --enable_platform_specific_config
+
 # Windows-specific configuration
-startup --output_user_root=C:/bazel/output
-startup --output_base=C:/bazel/output/base
+build:windows --spawn_strategy=local
+build:windows --strategy=Genrule=local
+build:windows --enable_runfiles
+build:windows --experimental_convenience_symlinks=ignore
 
-# Use absolute paths on Windows
-build --experimental_convenience_symlinks=ignore
-build --experimental_no_product_name_out_symlink
+# Unix-specific configuration (Linux and macOS)
+build:unix --spawn_strategy=sandboxed
+build:unix --strategy=Genrule=sandboxed
 
-# Disable sandboxing on Windows
-build --spawn_strategy=local
-
-# Use local execution
-build --strategy=Genrule=local
-
-# Windows path handling
-startup --windows_enable_symlinks
-build --enable_runfiles
+# Detect platform automatically
+build:windows --enable_runfiles
