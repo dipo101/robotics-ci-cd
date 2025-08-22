@@ -1,0 +1,77 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Debug, Release]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential ninja-build
+
+    - name: Download and install MuJoCo
+      run: |
+        # This is a placeholder for downloading and installing MuJoCo.
+        # For now, we'll just create a dummy directory.
+        mkdir -p $HOME/mujoco
+        echo "CMAKE_PREFIX_PATH=$HOME/mujoco" >> $GITHUB_ENV
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Configure CMake
+      run: >
+        cmake -S . -B build
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        ${{ runner.os == 'Linux' && '-G Ninja' || '' }}
+
+    - name: Build project
+      run: cmake --build build --config ${{ matrix.build_type }}
+
+    - name: Run C++ Tests
+      run: |
+        cd build
+        ctest -C ${{ matrix.build_type }} --output-on-failure
+    
+    - name: Install Python dependencies and run Python tests
+      run: |
+        pip install pytest
+        pip install .
+        pytest tests/python
+
+  lint-and-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run clang-format check (placeholder)
+        run: |
+          # Placeholder for clang-format check
+          echo "Clang-format check would run here."
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Run ruff check (placeholder)
+        run: |
+          # Placeholder for ruff check
+          echo "Ruff check would run here."
