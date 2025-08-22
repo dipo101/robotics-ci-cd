@@ -35,41 +35,36 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Setup Windows environment
-      if: matrix.os == 'windows-latest'
-      shell: powershell
+    - name: Sanitize env & build (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        Write-Host "Setting up Windows environment..."
-        # Enable Developer Mode for symlinks
-        reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
-        # Enable long paths
-        reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem" /v "LongPathsEnabled" /t REG_DWORD /d 1 /f
-        # Set execution policy to allow scripts
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        # Create .bazelrc in workspace root with proper Windows paths
-        $workspace = (Get-Location).Path
-        $bazelDir = Join-Path $workspace ".bazel-cache"
-        New-Item -Path $bazelDir -ItemType Directory -Force | Out-Null
-        icacls $bazelDir /grant "Everyone:(OI)(CI)F" /T
+        $ErrorActionPreference = "Stop"
+        # Stable absolute dirs on the current drive (D: on GitHub runners)
+        $drive = (Get-Location).Path.Substring(0,2) # e.g. 'D:'
+        $ROOT  = "$drive/bzl" -replace '\\','/'
+        New-Item -ItemType Directory -Force -Path $ROOT | Out-Null
 
-        # Use Windows-style paths in .bazelrc
-        $bazelDirEscaped = $bazelDir.Replace('\', '\\')
-        Set-Content -Path ".bazelrc" -Value @(
-          "startup --windows_enable_symlinks",
-          "startup --output_user_root=$bazelDirEscaped",
-          "startup --output_base=$bazelDirEscaped\\base",
-          "",
-          "# Common settings",
-          "build --enable_runfiles",
-          "build --noincompatible_windows_native_test_wrapper",
-          "",
-          "# Windows-specific configuration",
-          "build:windows --enable_runfiles",
-          "build:windows --spawn_strategy=local",
-          "build:windows --strategy=Genrule=local",
-          "build:windows --test_env=TEMP",
-          "build:windows --test_env=TMP"
-        )
+        # Nuke problematic vars that Bazel/Java read
+        foreach ($k in @('BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE','TEST_TMPDIR','HOME','TMP','TEMP')) {
+          $v = [Environment]::GetEnvironmentVariable($k,'Process')
+          if ($null -ne $v -and ($v -eq '\' -or $v -eq '/' -or $v -eq '')) {
+            [Environment]::SetEnvironmentVariable($k,$null,'Process')
+          }
+        }
+
+        # Optional: set sane temp/HOME to absolute locations
+        $env:TMP  = "$ROOT/tmp"
+        $env:TEMP = "$ROOT/tmp"
+        $env:HOME = "$ROOT/home"
+        New-Item -ItemType Directory -Force -Path $env:TMP,$env:HOME | Out-Null
+
+        # Ensure a clean server with known user root
+        bazel --output_user_root=$ROOT shutdown
+
+        # Show where Bazel will write (sanity)
+        bazel --output_user_root=$ROOT info release
+        bazel --output_user_root=$ROOT info output_base
 
     - name: Debug environment (Windows only)
       if: matrix.os == 'windows-latest'
@@ -101,69 +96,26 @@ jobs:
           bazel-cache-${{ matrix.os }}-
 
     - name: Build all targets (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: powershell
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        Write-Host "Running Bazel build on Windows with detailed logging..."
-        # Create an empty log file first
-        New-Item -Path bazel-build.log -ItemType File -Force | Out-Null
-        
-        # Get absolute path to workspace
-        $workspace = (Get-Location).Path
-        Write-Host "Workspace path: $workspace"
-        
-        # Set environment variables to help Bazel find paths
-        $env:BAZEL_WORKSPACE = $workspace
-        $env:BAZEL_OUTPUT_BASE = Join-Path $workspace ".bazel-cache\base"
-        
-        # Run from workspace root with absolute path
-        Push-Location $workspace
-        try {
-          # Run Bazel and capture ALL output
-          $output = & {
-            $ErrorActionPreference = 'Continue'
-            & bazel build //... --verbose_failures --show_timestamps --config=windows 2>&1
-            $LASTEXITCODE
-          }
-          
-          # The last line is the exit code
-          $exitCode = $output[-1]
-          # Remove the exit code from output
-          $output = $output[0..($output.Length-2)]
-          
-          # Save all output to the log file
-          $output | Out-File -FilePath bazel-build.log -Encoding UTF8
-          
-          Write-Host "=== Bazel build log ==="
-          Get-Content bazel-build.log
-          Write-Host "=== End Bazel build log ==="
-          Write-Host "Bazel build completed with exit code: $exitCode"
-          
-          exit $exitCode
-        }
-        finally {
-          Pop-Location
-        }
+        # Build with absolute output root
+        $drive = (Get-Location).Path.Substring(0,2)
+        $ROOT  = "$drive/bzl" -replace '\\','/'
+        bazel --output_user_root=$ROOT build //... --verbose_failures --show_timestamps
 
     - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
       run: bazel build //... --config=unix
 
     - name: Test all targets (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: powershell
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        # Use the same workspace path as build
-        $workspace = (Get-Location).Path
-        $env:BAZEL_WORKSPACE = $workspace
-        Push-Location $workspace
-        try {
-          bazel test //... --verbose_failures --show_timestamps --config=windows
-          exit $LASTEXITCODE
-        }
-        finally {
-          Pop-Location
-        }
+        # Test with absolute output root
+        $drive = (Get-Location).Path.Substring(0,2)
+        $ROOT  = "$drive/bzl" -replace '\\','/'
+        bazel --output_user_root=$ROOT test //... --verbose_failures --show_timestamps
 
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
