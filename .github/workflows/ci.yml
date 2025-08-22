@@ -40,29 +40,38 @@ jobs:
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
-        # Stable absolute dirs on the current drive (D: on GitHub runners)
+
+        # Short, absolute output root on the current drive (GitHub runners use D:)
         $drive = (Get-Location).Path.Substring(0,2) # e.g. 'D:'
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        New-Item -ItemType Directory -Force -Path $ROOT | Out-Null
+        New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home" | Out-Null
 
-        # Nuke problematic vars that Bazel/Java read
-        foreach ($k in @('BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE','TEST_TMPDIR','HOME','TMP','TEMP')) {
+        # Scrub problematic env vars that, if set to "\" or empty, make Bazel try to stat "\\?\"
+        $bad = { param($v) $null -ne $v -and ($v -eq '\' -or $v -eq '/' -or $v -eq '') }
+        $vars = 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE','TEST_TMPDIR','HOME','TMP','TEMP'
+        foreach ($k in $vars) {
           $v = [Environment]::GetEnvironmentVariable($k,'Process')
-          if ($null -ne $v -and ($v -eq '\' -or $v -eq '/' -or $v -eq '')) {
-            [Environment]::SetEnvironmentVariable($k,$null,'Process')
-          }
+          if (& $bad $v) { [Environment]::SetEnvironmentVariable($k,$null,'Process') }
         }
 
-        # Optional: set sane temp/HOME to absolute locations
+        # Set sane, absolute TEMP/HOME for the process (avoid anything under system profiles)
         $env:TMP  = "$ROOT/tmp"
         $env:TEMP = "$ROOT/tmp"
         $env:HOME = "$ROOT/home"
-        New-Item -ItemType Directory -Force -Path $env:TMP,$env:HOME | Out-Null
 
-        # Ensure a clean server with known user root
+        # Optional: harden .bazelrc if the repo has bad startup lines pointing to "\" or "/"
+        $rcPath = Join-Path (Get-Location) ".bazelrc"
+        if (Test-Path $rcPath) {
+          $rc = Get-Content $rcPath -Raw
+          $rc = $rc -replace 'startup\s+--output_user_root\s*=\s*[\\/]\s*', "startup --output_user_root=$ROOT`n"
+          $rc = $rc -replace 'startup\s+--output_base\s*=\s*[\\/]\s*',       "startup --output_base=$ROOT/out`n"
+          Set-Content -NoNewline -Path $rcPath -Value $rc
+        }
+
+        # Make sure we're not reusing a server started with bad env
         bazel --output_user_root=$ROOT shutdown
 
-        # Show where Bazel will write (sanity)
+        # Sanity: show what Bazel thinks
         bazel --output_user_root=$ROOT info release
         bazel --output_user_root=$ROOT info output_base
 
@@ -99,10 +108,10 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # Build with absolute output root
+        # Use same output root as sanitize step
         $drive = (Get-Location).Path.Substring(0,2)
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT build //... --verbose_failures --show_timestamps
+        bazel --output_user_root=$ROOT build //... --verbose_failures --show_timestamps --output_base="$ROOT/out"
 
     - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
@@ -112,10 +121,10 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        # Test with absolute output root
+        # Use same output root as sanitize step
         $drive = (Get-Location).Path.Substring(0,2)
         $ROOT  = "$drive/bzl" -replace '\\','/'
-        bazel --output_user_root=$ROOT test //... --verbose_failures --show_timestamps
+        bazel --output_user_root=$ROOT test //... --verbose_failures --show_timestamps --output_base="$ROOT/out"
 
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
