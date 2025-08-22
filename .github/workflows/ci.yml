@@ -88,27 +88,41 @@ jobs:
         # Create an empty log file first
         New-Item -Path bazel-build.log -ItemType File -Force | Out-Null
         
-        # Run Bazel and capture ALL output
-        $output = & {
-          $ErrorActionPreference = 'Continue'
-          & bazel build //... --verbose_failures --show_timestamps --config=windows 2>&1
-          $LASTEXITCODE
+        # Get absolute path to workspace
+        $workspace = (Get-Location).Path
+        Write-Host "Workspace path: $workspace"
+        
+        # Set BAZEL_WORKSPACE to help Bazel find the root
+        $env:BAZEL_WORKSPACE = $workspace
+        
+        # Run from workspace root with absolute path
+        Push-Location $workspace
+        try {
+          # Run Bazel and capture ALL output
+          $output = & {
+            $ErrorActionPreference = 'Continue'
+            & bazel --output_base="$workspace\.bazel_output" build //... --verbose_failures --show_timestamps 2>&1
+            $LASTEXITCODE
+          }
+          
+          # The last line is the exit code
+          $exitCode = $output[-1]
+          # Remove the exit code from output
+          $output = $output[0..($output.Length-2)]
+          
+          # Save all output to the log file
+          $output | Out-File -FilePath bazel-build.log -Encoding UTF8
+          
+          Write-Host "=== Bazel build log ==="
+          Get-Content bazel-build.log
+          Write-Host "=== End Bazel build log ==="
+          Write-Host "Bazel build completed with exit code: $exitCode"
+          
+          exit $exitCode
         }
-        
-        # The last line is the exit code
-        $exitCode = $output[-1]
-        # Remove the exit code from output
-        $output = $output[0..($output.Length-2)]
-        
-        # Save all output to the log file
-        $output | Out-File -FilePath bazel-build.log -Encoding UTF8
-        
-        Write-Host "=== Bazel build log ==="
-        Get-Content bazel-build.log
-        Write-Host "=== End Bazel build log ==="
-        Write-Host "Bazel build completed with exit code: $exitCode"
-        
-        exit $exitCode
+        finally {
+          Pop-Location
+        }
 
     - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
@@ -116,7 +130,19 @@ jobs:
 
     - name: Test all targets (Windows)
       if: matrix.os == 'windows-latest'
-      run: bazel test //... --config=windows
+      shell: powershell
+      run: |
+        # Use the same workspace path as build
+        $workspace = (Get-Location).Path
+        $env:BAZEL_WORKSPACE = $workspace
+        Push-Location $workspace
+        try {
+          bazel --output_base="$workspace\.bazel_output" test //... --verbose_failures --show_timestamps
+          exit $LASTEXITCODE
+        }
+        finally {
+          Pop-Location
+        }
 
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
