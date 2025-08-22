@@ -75,21 +75,29 @@ jobs:
       shell: powershell
       run: |
         Write-Host "Running Bazel build on Windows with detailed logging..."
-        try {
-          bazel build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
-          $exitCode = $LASTEXITCODE
-        } catch {
-          Write-Host "Bazel build failed with exception: $_"
-          $exitCode = 1
+        # Create an empty log file first
+        New-Item -Path bazel-build.log -ItemType File -Force | Out-Null
+        
+        # Run Bazel and capture ALL output
+        $output = & {
+          $ErrorActionPreference = 'Continue'
+          & bazel build //... --verbose_failures --show_timestamps 2>&1
+          $LASTEXITCODE
         }
+        
+        # The last line is the exit code
+        $exitCode = $output[-1]
+        # Remove the exit code from output
+        $output = $output[0..($output.Length-2)]
+        
+        # Save all output to the log file
+        $output | Out-File -FilePath bazel-build.log -Encoding UTF8
+        
+        Write-Host "=== Bazel build log ==="
+        Get-Content bazel-build.log
+        Write-Host "=== End Bazel build log ==="
         Write-Host "Bazel build completed with exit code: $exitCode"
-        if (Test-Path bazel-build.log) {
-          Write-Host "=== Bazel build log ==="
-          Get-Content bazel-build.log
-          Write-Host "=== End Bazel build log ==="
-        } else {
-          Write-Host "No bazel-build.log file was created"
-        }
+        
         exit $exitCode
 
     - name: Build all targets (Non-Windows)
