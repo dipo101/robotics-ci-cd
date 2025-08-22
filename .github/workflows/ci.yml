@@ -41,41 +41,39 @@ jobs:
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Short absolute root on current drive (GitHub runners: D:)
-        $drive = (Get-Location).Path.Substring(0,2)        # e.g. 'D:'
+        $drive = (Get-Location).Path.Substring(0,2)   # e.g. 'D:'
         $ROOT  = "$drive/bzl" -replace '\\','/'
         New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home","$ROOT/out" | Out-Null
 
-        # Hard-set absolute paths (avoid system defaults entirely)
+        # Absolute, sane dirs (do NOT touch HOMEDRIVE/HOMEPATH)
         $env:TMP         = "$ROOT/tmp"
         $env:TEMP        = "$ROOT/tmp"
-        $env:HOME        = "$ROOT/home"
         $env:TEST_TMPDIR = "$ROOT/tmp"
-        $env:HOMEDRIVE   = $drive
-        $env:HOMEPATH    = "\bzl\home"        # use Windows-style here
+        $env:HOME        = "$ROOT/home"
         $env:USERPROFILE = "$ROOT/home"
 
-        # Scrub Bazel path envs that can poison startup
+        # Scrub Bazel-specific startup envs
         foreach ($k in 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE') {
           [Environment]::SetEnvironmentVariable($k,$null,'Process')
         }
 
-        # Kill ANY running server regardless of rc/user root
+        # Kill any server started with different env/roots
         bazel --ignore_all_rc_files shutdown
 
-        # Sanity: show what rc files WOULD be read (for debugging only)
+        # All bazel invocations in THIS step must carry the same startup flags
         bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out info output_base
 
-        # Build with startup opts; ignore ALL rc files to avoid bad paths from system/user/workspace rc
-        bazel --ignore_all_rc_files --announce_rc `
-              --output_user_root=$ROOT --output_base=$ROOT/out `
+        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out `
               build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
 
         bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out `
               test //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-test.log
 
+        # Extra debug info to verify rc and temp settings
+        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out info 2>&1 | Tee-Object -FilePath bazel-info.log
+
         Write-Host "`n=== Path env dump ==="
-        gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|HOMEDRIVE|HOMEPATH|USERPROFILE' } | sort Name | ft -AutoSize
+        gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|USERPROFILE|HOMEDRIVE|HOMEPATH' } | sort Name | ft -AutoSize
 
     - name: Build all targets (Unix)
       if: matrix.os != 'windows-latest'
@@ -104,6 +102,7 @@ jobs:
         path: |
           bazel-build.log
           bazel-test.log
+          bazel-info.log
         retention-days: 7
 
   lint-and-format:
