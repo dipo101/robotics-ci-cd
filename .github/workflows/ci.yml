@@ -35,51 +35,52 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Build on Windows (hardened)
+    - name: Build on Windows (rc-free, pinned paths)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Short absolute root on the current drive (GitHub runners: D:)
-        $drive = (Get-Location).Path.Substring(0,2)    # e.g. 'D:'
+        # Short absolute root on current drive (GitHub runners: D:)
+        $drive = (Get-Location).Path.Substring(0,2)        # e.g. 'D:'
         $ROOT  = "$drive/bzl" -replace '\\','/'
         New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home","$ROOT/out" | Out-Null
 
-        # Hard-set path envs to absolute values (don't rely on runner defaults)
+        # Hard-set absolute paths (avoid system defaults entirely)
         $env:TMP         = "$ROOT/tmp"
         $env:TEMP        = "$ROOT/tmp"
         $env:HOME        = "$ROOT/home"
         $env:TEST_TMPDIR = "$ROOT/tmp"
         $env:HOMEDRIVE   = $drive
-        $env:HOMEPATH    = "/bzl/home"
+        $env:HOMEPATH    = "\bzl\home"        # use Windows-style here
         $env:USERPROFILE = "$ROOT/home"
 
-        # Scrub Bazel path envs that, if '\' or empty, poison the server
+        # Scrub Bazel path envs that can poison startup
         foreach ($k in 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE') {
           [Environment]::SetEnvironmentVariable($k,$null,'Process')
         }
 
-        # If your repo .bazelrc has bad startup paths, neutralize them in-process
-        $rcPath = Join-Path (Get-Location) ".bazelrc"
-        if (Test-Path $rcPath) {
-          $rc = Get-Content $rcPath -Raw
-          $rc = $rc -replace 'startup\s+--output_user_root\s*=\s*[\\/]\s*', "startup --output_user_root=$ROOT`n"
-          $rc = $rc -replace 'startup\s+--output_base\s*=\s*[\\/]\s*',       "startup --output_base=$ROOT/out`n"
-          Set-Content -NoNewline -Path $rcPath -Value $rc
-        }
+        # Kill ANY running server regardless of rc/user root
+        bazel --ignore_all_rc_files shutdown
 
-        # Ensure no server is running with different roots
-        bazel --output_user_root=$ROOT --output_base=$ROOT/out shutdown
+        # Sanity: show what rc files WOULD be read (for debugging only)
+        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out info output_base
 
-        # Build with startup opts (keep these on EVERY bazel call in this step)
-        bazel --output_user_root=$ROOT --output_base=$ROOT/out info output_base
-        bazel --output_user_root=$ROOT --output_base=$ROOT/out build //... --verbose_failures --show_timestamps
-        bazel --output_user_root=$ROOT --output_base=$ROOT/out test //... --verbose_failures --show_timestamps
+        # Build with startup opts; ignore ALL rc files to avoid bad paths from system/user/workspace rc
+        bazel --ignore_all_rc_files --announce_rc `
+              --output_user_root=$ROOT --output_base=$ROOT/out `
+              build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
+
+        bazel --ignore_all_rc_files --output_user_root=$ROOT --output_base=$ROOT/out `
+              test //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-test.log
 
         Write-Host "`n=== Path env dump ==="
         gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|HOMEDRIVE|HOMEPATH|USERPROFILE' } | sort Name | ft -AutoSize
 
+    - name: Build all targets (Unix)
+      if: matrix.os != 'windows-latest'
+      run: bazel build //... --config=unix
+    
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
       run: bazel test //... --config=unix
@@ -95,13 +96,14 @@ jobs:
         export PYTHONPATH="${PYTHONPATH}:$(pwd)/python/src"
         pytest tests/python
 
-    - name: Upload debug logs (Windows only)
-      if: matrix.os == 'windows-latest' && failure()
+    - name: Upload Windows logs
+      if: matrix.os == 'windows-latest'
       uses: actions/upload-artifact@v4
       with:
         name: windows-debug-logs-${{ github.run_id }}
         path: |
           bazel-build.log
+          bazel-test.log
         retention-days: 7
 
   lint-and-format:
