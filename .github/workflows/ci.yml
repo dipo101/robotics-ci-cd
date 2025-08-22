@@ -21,9 +21,9 @@ jobs:
         submodules: 'recursive'
 
     - name: Set up Bazel
-      uses: bazel-contrib/setup-bazel@v0.15.0
+      uses: bazel-contrib/setup-bazel@0.15.0
       with:
-        bazelisk-version: 'v1.27.0'
+        bazelisk-version: '1.27.0'
         bazelisk-cache: 'true'
         disk-cache: 'true'
         repository-cache: 'true'
