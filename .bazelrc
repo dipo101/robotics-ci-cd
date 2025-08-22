@@ -1,8 +1,13 @@
 # Windows-specific configuration
-build --enable_platform_specific_config
+build:windows --enable_platform_specific_config
 
-# Disable sandboxing on Windows if it causes issues
-build --spawn_strategy=standalone
+# Disable sandboxing on Windows
+build:windows --spawn_strategy=standalone
 
 # Use local execution on Windows
-build --strategy=Genrule=local
+build:windows --strategy=Genrule=local
+
+# Windows path handling
+startup --windows_enable_symlinks
+build:windows --enable_runfiles
+build:windows --experimental_repository_cache_hardlinks

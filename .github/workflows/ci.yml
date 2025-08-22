@@ -35,6 +35,13 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
+    - name: Enable Windows Developer Mode (for symlinks)
+      if: matrix.os == 'windows-latest'
+      shell: powershell
+      run: |
+        Write-Host "Enabling Windows Developer Mode for symlinks..."
+        reg add "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1"
+
     - name: Debug environment (Windows only)
       if: matrix.os == 'windows-latest'
       shell: powershell
@@ -81,7 +88,7 @@ jobs:
         # Run Bazel and capture ALL output
         $output = & {
           $ErrorActionPreference = 'Continue'
-          & bazel build //... --verbose_failures --show_timestamps 2>&1
+          & bazel build //... --config=windows --verbose_failures --show_timestamps 2>&1
           $LASTEXITCODE
         }
         
