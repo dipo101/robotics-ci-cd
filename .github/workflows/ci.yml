@@ -56,8 +56,8 @@ jobs:
     - name: Install Python dependencies and run Python tests
       run: |
         pip install pytest build
-        python -m build
-        pip install .
+        python -m build --wheel
+        pip install dist/*.whl
         pytest tests/python
 
   lint-and-format:
