@@ -9,12 +9,9 @@ jobs:
   pypi-publish:
     name: Build and publish Python package to PyPI
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/my_robot_py
     permissions:
-      id-token: write
-
+      id-token: write  # OIDC authentication with PyPI
+      contents: read   # To read the repository
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,7 +45,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     permissions:
-      contents: write
+      contents: write  # To create GitHub releases
 
     steps:
       - name: Checkout repository
