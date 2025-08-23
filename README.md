@@ -59,7 +59,6 @@ pytest tests/python
 ```
 robotics-ci-cd/
 ├── apps/                    # C++ executable applications
-├── extern/                  # External dependencies (pybind11, etc.)
 ├── include/                 # Public C++ headers
 ├── models/                  # Simulation models and assets
 ├── python/                  # Python bindings and pure Python code
@@ -73,7 +72,7 @@ robotics-ci-cd/
 ## Technology Stack
 
 - **Build System**: Bazel
-- **C++/Python Bridge**: pybind11
+- **C++/Python Bridge**: pybind11 (via bzlmod)
 - **C++ Testing**: GoogleTest
 - **Python Testing**: pytest
 - **CI/CD**: GitHub Actions
