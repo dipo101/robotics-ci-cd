@@ -25,6 +25,12 @@ jobs:
       with:
         python-version: '3.11'
 
+    - name: Pin Bazel version on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Set-Content -NoNewline -Path .bazelversion -Value "7.3.2"
+
     - name: Set up Bazel
       uses: bazel-contrib/setup-bazel@0.15.0
       with:
@@ -84,7 +90,7 @@ jobs:
         # Build & test (tee to files for artifacts)
         bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
               --output_user_root=$ROOT --output_base=$ROOT/out `
-              build //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
+              build //python:my_robot_py --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
 
         bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
               --output_user_root=$ROOT --output_base=$ROOT/out `
@@ -104,29 +110,46 @@ jobs:
     - name: Test all targets (Unix)
       if: matrix.os != 'windows-latest'
       run: bazel test //... --config=unix
-    
-    - name: Install Python dependencies and run Python tests
+
+    - name: Build Python extension with Bazel
+      shell: pwsh
+      run: |
+        # build just the py extension target
+        bazel build //python:my_robot_py
+
+    - name: Run pytest (pick .pyd on Windows, .so elsewhere)
       shell: bash
       run: |
-        pip install pytest
-        # Copy the Bazel-built extension to the Python package location
+        set -euo pipefail
+        pip install -q pytest
+
+        BAZEL_BIN="$(bazel info bazel-bin)"
+        if [[ "$RUNNER_OS" == "Windows" ]]; then EXT="pyd"; else EXT="so"; fi
+
         mkdir -p python/src/my_robot_py/
-        cp bazel-bin/python/my_robot_py.so python/src/my_robot_py/
-        # Add the python directory to PYTHONPATH so tests can find the module
+        SRC="$BAZEL_BIN/python/my_robot_py.$EXT"
+        if [[ ! -f "$SRC" ]]; then
+          echo "Expected artifact not found: $SRC"
+          echo "Bazel output tree:"
+          find "$BAZEL_BIN" -maxdepth 2 -type f -printf '%P\n' | sed -n '1,200p'
+          exit 1
+        fi
+        cp "$SRC" python/src/my_robot_py/
+
         export PYTHONPATH="${PYTHONPATH}:$(pwd)/python/src"
-        pytest tests/python
+        pytest -q tests/python
 
     - name: Upload Windows logs
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
       uses: actions/upload-artifact@v4
       with:
-        name: windows-debug-logs-${{ github.run_id }}
+        name: windows-bazel-logs-${{ github.run_id }}
         path: |
           bazel-build.log
           bazel-test.log
           bazel-info.log
-          scan-findings.txt
-        retention-days: 7
+          D:\bzl\out\java.log.*.log.java.*
+        if-no-files-found: warn
 
   lint-and-format:
     runs-on: ubuntu-latest
