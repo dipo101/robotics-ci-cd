@@ -16,10 +16,8 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -48,13 +46,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -76,20 +74,11 @@ jobs:
         shell: bash
         run: |
           mkdir -p staging
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            cp bazel-bin/apps/my_app/my_app staging/
-            tar -czvf my_robot_project-${{ github.ref_name }}-${{ matrix.os }}.tar.gz -C staging .
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            cp bazel-bin/apps/my_app/my_app.exe staging/
-            7z a my_robot_project-${{ github.ref_name }}-${{ matrix.os }}.zip ./staging/*
-          elif [ "$RUNNER_OS" == "macOS" ]; then
-            cp bazel-bin/apps/my_app/my_app staging/
-            zip -r my_robot_project-${{ github.ref_name }}-${{ matrix.os }}.zip staging
-          fi
+          cp bazel-bin/apps/my_app/my_app staging/
+          tar -czvf my_robot_project-${{ github.ref_name }}-${{ matrix.os }}.tar.gz -C staging .
         
-      - name: Upload C++ artifact to GitHub Release
-        uses: actions/upload-release-artifact@v3
+      - name: Upload artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          path: |
-            my_robot_project-*.tar.gz
-            my_robot_project-*.zip
+          files: my_robot_project-*.tar.gz
+          fail_on_unmatched_files: true
