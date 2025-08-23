@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -25,12 +25,6 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Pin Bazel version on Windows
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Set-Content -NoNewline -Path .bazelversion -Value "7.3.2"
-
     - name: Set up Bazel
       uses: bazel-contrib/setup-bazel@0.15.0
       with:
@@ -41,93 +35,26 @@ jobs:
       env:
         PYTHON_BIN_PATH: ${{ env.pythonLocation }}/bin/python
 
-    - name: Build on Windows (pin home/tmp for Java + align HOMEDRIVE)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = "Stop"
-        $ProgressPreference = "SilentlyContinue"
-
-        # Stable absolute roots (GitHub Windows runners use D:)
-        $drive = (Get-Location).Path.Substring(0,2)   # e.g. 'D:'
-        $ROOT  = "$drive/bzl" -replace '\\','/'
-        New-Item -ItemType Directory -Force -Path "$ROOT/tmp","$ROOT/home","$ROOT/out" | Out-Null
-
-        # Process env (align Windows + Java concepts of "home/tmp")
-        $env:TMP         = "$ROOT/tmp"
-        $env:TEMP        = "$ROOT/tmp"
-        $env:TEST_TMPDIR = "$ROOT/tmp"
-        $env:HOME        = "$ROOT/home"
-        $env:USERPROFILE = "$ROOT/home"
-        $env:HOMEDRIVE   = $drive             # <- was C:, make it match workspace drive
-        $env:HOMEPATH    = "\bzl\home"        # Windows-style; dir exists above
-
-        # scrub any dangerous Bazel path envs
-        foreach ($k in 'BAZEL_OUTPUT_USER_ROOT','BAZEL_OUTPUT_BASE') {
-          [Environment]::SetEnvironmentVariable($k,$null,'Process')
-        }
-        # clear any env literally "\" or "/"
-        gci env: | ? { $_.Value -in '\','/' } | % {
-          Write-Host "Clearing suspicious env: $($_.Name)='$($_.Value)'"
-          [Environment]::SetEnvironmentVariable($_.Name,$null,'Process')
-        }
-
-        # Startup: pin Java home/tmp seen by Bazel's JVM as well
-        $JHOME = "$ROOT/home"
-        $JTMP  = "$ROOT/tmp"
-        $HOSTJVM = @(
-          "--host_jvm_args=-Duser.home=$JHOME",
-          "--host_jvm_args=-Djava.io.tmpdir=$JTMP"
-        )
-
-        # Clean server and show output_base
-        bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
-              --output_user_root=$ROOT --output_base=$ROOT/out shutdown
-
-        bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
-              --output_user_root=$ROOT --output_base=$ROOT/out info output_base
-
-        # Build & test (tee to files for artifacts)
-        bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
-              --output_user_root=$ROOT --output_base=$ROOT/out `
-              build //python:my_robot_py --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-build.log
-
-        bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
-              --output_user_root=$ROOT --output_base=$ROOT/out `
-              test //... --verbose_failures --show_timestamps 2>&1 | Tee-Object -FilePath bazel-test.log
-
-        # Bazel info dump for post-mortem
-        bazel --ignore_all_rc_files --nowatchfs @HOSTJVM `
-              --output_user_root=$ROOT --output_base=$ROOT/out info 2>&1 | Tee-Object -FilePath bazel-info.log
-
-        Write-Host "`n=== Path env dump ==="
-        gci env: | ? { $_.Name -match 'BAZEL|TEST_TMPDIR|^TMP$|^TEMP$|^HOME$|USERPROFILE|HOMEDRIVE|HOMEPATH' } | sort Name | ft -AutoSize
-
-    - name: Build all targets (Unix)
-      if: matrix.os != 'windows-latest'
+    - name: Build all targets
       run: bazel build //... --config=unix
     
-    - name: Test all targets (Unix)
-      if: matrix.os != 'windows-latest'
+    - name: Test all targets
       run: bazel test //... --config=unix
 
-    - name: Build Python extension with Bazel (Unix)
-      if: matrix.os != 'windows-latest'
+    - name: Build Python extension with Bazel
       shell: bash
       run: |
         bazel build //python:my_robot_py
 
-    - name: Run pytest (pick .pyd on Windows, .so elsewhere)
+    - name: Run pytest
       shell: bash
       run: |
         set -euo pipefail
         pip install -q pytest
 
         BAZEL_BIN="$(bazel info bazel-bin)"
-        if [[ "${RUNNER_OS}" == "Windows" ]]; then EXT="pyd"; else EXT="so"; fi
-
         mkdir -p python/src/my_robot_py/
-        SRC="${BAZEL_BIN}/python/my_robot_py.${EXT}"
+        SRC="${BAZEL_BIN}/python/my_robot_py.so"
         if [[ ! -f "$SRC" ]]; then
           echo "Expected artifact not found: $SRC"
           echo "Bazel output tree (first 200 files under bazel-bin):"
@@ -138,20 +65,7 @@ jobs:
 
         # Safe even when PYTHONPATH is not set (works with 'set -u')
         export PYTHONPATH="$(pwd)/python/src${PYTHONPATH:+:$PYTHONPATH}"
-
         pytest -q tests/python
-
-    - name: Upload Windows logs
-      if: runner.os == 'Windows'
-      uses: actions/upload-artifact@v4
-      with:
-        name: windows-bazel-logs-${{ github.run_id }}
-        path: |
-          bazel-build.log
-          bazel-test.log
-          bazel-info.log
-          D:\bzl\out\java.log.*.log.java.*
-        if-no-files-found: warn
 
   lint-and-format:
     runs-on: ubuntu-latest
