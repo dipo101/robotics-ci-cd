@@ -111,10 +111,10 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: bazel test //... --config=unix
 
-    - name: Build Python extension with Bazel
-      shell: pwsh
+    - name: Build Python extension with Bazel (Unix)
+      if: matrix.os != 'windows-latest'
+      shell: bash
       run: |
-        # build just the py extension target
         bazel build //python:my_robot_py
 
     - name: Run pytest (pick .pyd on Windows, .so elsewhere)
@@ -124,19 +124,21 @@ jobs:
         pip install -q pytest
 
         BAZEL_BIN="$(bazel info bazel-bin)"
-        if [[ "$RUNNER_OS" == "Windows" ]]; then EXT="pyd"; else EXT="so"; fi
+        if [[ "${RUNNER_OS}" == "Windows" ]]; then EXT="pyd"; else EXT="so"; fi
 
         mkdir -p python/src/my_robot_py/
-        SRC="$BAZEL_BIN/python/my_robot_py.$EXT"
+        SRC="${BAZEL_BIN}/python/my_robot_py.${EXT}"
         if [[ ! -f "$SRC" ]]; then
           echo "Expected artifact not found: $SRC"
-          echo "Bazel output tree:"
-          find "$BAZEL_BIN" -maxdepth 2 -type f -printf '%P\n' | sed -n '1,200p'
+          echo "Bazel output tree (first 200 files under bazel-bin):"
+          find "$BAZEL_BIN" -type f | sed "s|^${BAZEL_BIN}/||" | head -n 200
           exit 1
         fi
         cp "$SRC" python/src/my_robot_py/
 
-        export PYTHONPATH="${PYTHONPATH}:$(pwd)/python/src"
+        # Safe even when PYTHONPATH is not set (works with 'set -u')
+        export PYTHONPATH="$(pwd)/python/src${PYTHONPATH:+:$PYTHONPATH}"
+
         pytest -q tests/python
 
     - name: Upload Windows logs
