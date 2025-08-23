@@ -15,7 +15,7 @@ This project uses **Bazel** as the primary build system, providing:
 
 1. **Development**: A developer pushes a commit to a feature branch or opens a pull request against the main branch.
 2. **CI Trigger**: This action automatically triggers the CI workflow on GitHub Actions.
-3. **Matrix Build**: The CI workflow initiates a matrix of parallel jobs, building and testing the code across multiple configurations (e.g., Linux, Windows, and macOS).
+3. **Matrix Build**: The CI workflow initiates a matrix of parallel jobs, building and testing the code across multiple configurations (Linux and macOS).
 4. **Dependency Resolution**: Each job fetches and installs the necessary external dependencies using Bazel's dependency management.
 5. **Compilation**: The project is compiled using the Bazel build system.
 6. **C++ Unit Testing**: A suite of C++ unit tests, written using the GoogleTest framework, is executed to validate the core logic of individual components.
@@ -24,7 +24,7 @@ This project uses **Bazel** as the primary build system, providing:
 9. **Release Trigger**: Upon successful integration into the main branch, a developer creates a versioned Git tag (e.g., v1.0.0) to signify a release.
 10. **Release Workflow**: The creation of this tag automatically triggers a separate Release workflow.
 11. **Python Packaging**: The workflow builds a Python wheel package, which includes the compiled C++ extension module. This package is then published to the Python Package Index (PyPI).
-12. **C++ Artifact Packaging**: The workflow also packages the compiled C++ libraries, executables, and public header files into an archive (.zip or .tar.gz). This archive is attached to the corresponding GitHub Release.
+12. **C++ Artifact Packaging**: The workflow also packages the compiled C++ libraries, executables, and public header files into an archive (.tar.gz). This archive is attached to the corresponding GitHub Release.
 
 ## Quick Start
 
@@ -65,9 +65,9 @@ robotics-ci-cd/
 ├── python/                  # Python bindings and pure Python code
 ├── src/                     # C++ library sources
 ├── tests/                   # Test suites (C++ and Python)
-├── BUILD.bazel              # Root Bazel build file
-├── MODULE.bazel             # Bazel module configuration
-└── pyproject.toml           # Python packaging configuration
+├── BUILD.bazel             # Root Bazel build file
+├── MODULE.bazel            # Bazel module configuration
+└── pyproject.toml          # Python packaging configuration
 ```
 
 ## Technology Stack

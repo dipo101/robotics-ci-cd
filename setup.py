@@ -1,17 +1,15 @@
+from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext
 import os
-import shutil
 import subprocess
 import sys
 
-from setuptools import setup, Extension, find_packages
-from setuptools.command.build_ext import build_ext
-
 
 class BazelExtension(Extension):
-    """A C/C++ extension that is defined as a Bazel target."""
+    """Python extension that uses Bazel to build."""
     def __init__(self, name, bazel_target, **kwargs):
-        self.bazel_target = bazel_target
         super().__init__(name, sources=[], **kwargs)
+        self.bazel_target = bazel_target
 
 
 class BuildBazelExtension(build_ext):
@@ -40,32 +38,27 @@ class BuildBazelExtension(build_ext):
         # Copy the built extension to the location expected by setuptools
         bazel_bin_path = "bazel-bin"
         target_name = ext.bazel_target.replace("//", "").replace(":", "/")
-        
-        # Determine the file extension based on the OS
-        if sys.platform == "darwin":
-            ext_name = ".so"
-        elif sys.platform == "win32":
-            ext_name = ".pyd"
-        else:
-            ext_name = ".so"
-            
-        built_lib_path = os.path.join(bazel_bin_path, target_name + ext_name)
-        
+        built_lib_path = os.path.join(bazel_bin_path, target_name + ".so")
         shutil.copy(built_lib_path, self.get_ext_fullpath(ext.name))
 
 
 setup(
     name="my_robot_py",
     version="1.0.0",
-    packages=find_packages(where="python/src"),
-    package_dir={"": "python/src"},
+    author="Your Name",
+    author_email="your.email@example.com",
+    description="Python bindings for MyRobotProject",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     ext_modules=[
         BazelExtension(
-            name="my_robot_py.my_robot_py",
+            name="my_robot_py",
             bazel_target="//python:my_robot_py",
-        )
+        ),
     ],
-    cmdclass={"build_ext": BuildBazelExtension},
+    cmdclass={
+        'build_ext': BuildBazelExtension,
+    },
     zip_safe=False,
-    install_requires=[],  # No external dependencies
+    python_requires=">=3.10",
 )
